@@ -95,16 +95,30 @@ else:
     DTYPE  = torch.float32
 print(f"Training device: {DEVICE}  |  dtype: {DTYPE}")
 
-model = AutoModelForSequenceClassification.from_pretrained(
-    MODEL_NAME,
-    num_labels=NUM_LABELS,
-    id2label=ID2LABEL,
-    label2id=LABEL2ID,
-    trust_remote_code=True,
-    dtype=DTYPE,
-    # No device_map here — PEFT scatters layers after wrapping, causing
-    # constant CPU↔accelerator transfers. We move the whole model after PEFT.
-)
+if DEVICE == "mps":
+    # MPS: load without device_map, apply PEFT, then move everything in one shot.
+    # device_map after PEFT scatters layers across devices causing CPU↔MPS transfers.
+    model = AutoModelForSequenceClassification.from_pretrained(
+        MODEL_NAME,
+        num_labels=NUM_LABELS,
+        id2label=ID2LABEL,
+        label2id=LABEL2ID,
+        trust_remote_code=True,
+        dtype=DTYPE,
+    )
+else:
+    # CUDA / CPU: use device_map="auto" so the Trainer detects hf_device_map and
+    # skips DataParallel. PEFT + DataParallel deadlocks because frozen layers
+    # cannot be synchronised across replicas.
+    model = AutoModelForSequenceClassification.from_pretrained(
+        MODEL_NAME,
+        num_labels=NUM_LABELS,
+        id2label=ID2LABEL,
+        label2id=LABEL2ID,
+        trust_remote_code=True,
+        dtype=DTYPE,
+        device_map="auto",
+    )
 
 # Align config
 model.config.pad_token_id = tokenizer.pad_token_id
@@ -123,10 +137,10 @@ lora_config = LoraConfig(
 model = get_peft_model(model, lora_config)
 model.print_trainable_parameters()
 
-# Move the fully-wrapped model to the target device in one operation.
-# Doing this after get_peft_model() ensures every layer — base + adapters +
-# classification head — lands on the same device with no cross-device transfers.
-model = model.to(DEVICE)
+if DEVICE == "mps":
+    # Move the fully-wrapped model to MPS in one operation so every layer —
+    # base weights, adapters, and classification head — is on the same device.
+    model = model.to(DEVICE)
 
 # ===== TOKENIZE =====
 def tokenize_function(examples):
