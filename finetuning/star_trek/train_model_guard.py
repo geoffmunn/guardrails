@@ -4,6 +4,7 @@ import os
 import shutil  # Added for directory deletion
 import torch
 from datasets import load_dataset
+import torch.nn as nn
 from transformers import (
     AutoTokenizer,
     AutoModelForSequenceClassification,
@@ -206,12 +207,25 @@ training_args = TrainingArguments(
 )
 
 # ===== TRAINER =====
-trainer = Trainer(
+# Custom Trainer that computes cross-entropy loss explicitly rather than relying
+# on the model's internal loss path. PEFT + device_map can misroute the labels
+# argument through the LoRA wrapper, producing invalid label indices in the
+# CUDA NLL loss kernel. Computing loss here also ensures labels are cast to
+# torch.long (int64), which the CUDA kernel strictly requires.
+class ClassificationTrainer(Trainer):
+    def compute_loss(self, model, inputs, return_outputs=False, num_items_in_batch=None):
+        labels = inputs.pop("labels").long()          # guarantee int64
+        outputs = model(**inputs)                      # model sees no labels → returns logits only
+        logits  = outputs.logits.float()              # cast to float32 for stable softmax
+        loss    = nn.CrossEntropyLoss()(logits, labels)
+        return (loss, outputs) if return_outputs else loss
+
+trainer = ClassificationTrainer(
     model=model,
     args=training_args,
     train_dataset=tokenized_dataset["train"],
     eval_dataset=tokenized_dataset["test"],
-    processing_class=tokenizer,  # ✅ Use 'processing_class' instead of deprecated 'tokenizer'
+    processing_class=tokenizer,
 )
 
 # ===== TRAIN =====
