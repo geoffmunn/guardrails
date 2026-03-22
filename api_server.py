@@ -8,7 +8,7 @@ import argparse
 # ============================================================================
 # CONFIGURATION
 # ============================================================================
-MODEL_PATH = "geoffmunn/guardtest"
+MODEL_PATH = input("Model to load (Hugging Face id or local path) [geoffmunn/Qwen3-1.7B-StarTrekGuard]: ").strip() or "geoffmunn/Qwen3-1.7B-StarTrekGuard"
 MAX_LENGTH = 512
 ID2LABEL = {0: "not_related", 1: "related"}
 
@@ -34,11 +34,29 @@ def load_model(force_download=False):
         else:
             print(f"Loading {MODEL_PATH} model...")
        
-        tokenizer = AutoTokenizer.from_pretrained(
-            MODEL_PATH,
-            trust_remote_code=True,
-            force_download=force_download
-        )
+        # Newer transformers versions save extra_special_tokens as a list; some
+        # installed versions expect a dict and raise AttributeError on .keys().
+        # Patch the one broken method to accept both formats, then load normally.
+        try:
+            tokenizer = AutoTokenizer.from_pretrained(
+                MODEL_PATH,
+                trust_remote_code=True,
+                force_download=force_download,
+            )
+        except AttributeError:
+            print("⚠️  Patching extra_special_tokens list/dict mismatch in transformers...")
+            import transformers.tokenization_utils_base as _tub
+            _orig_set = _tub.PreTrainedTokenizerBase._set_model_specific_special_tokens
+            def _patched_set(self, special_tokens):
+                if isinstance(special_tokens, dict):
+                    _orig_set(self, special_tokens)
+                # list format: tokens are already in the vocabulary, nothing to register
+            _tub.PreTrainedTokenizerBase._set_model_specific_special_tokens = _patched_set
+            tokenizer = AutoTokenizer.from_pretrained(
+                MODEL_PATH,
+                trust_remote_code=True,
+                force_download=force_download,
+            )
         if tokenizer.pad_token is None:
             tokenizer.pad_token = tokenizer.eos_token
        
