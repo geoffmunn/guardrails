@@ -62,9 +62,21 @@ for col in possible_label_cols:
 if label_col is None:
     raise ValueError(f"❌ Could not find label column. Available: {dataset.column_names}")
 
+# Validate all raw label strings are known before mapping — catches wrong dataset files
+unique_raw_labels = set(dataset[label_col])
+unknown = unique_raw_labels - set(LABEL2ID.keys())
+if unknown:
+    raise ValueError(f"❌ Unknown label values in dataset: {unknown}. Expected: {set(LABEL2ID.keys())}")
+print(f"✅ Raw labels found: {unique_raw_labels}")
+
 dataset = dataset.map(lambda x: {"labels": LABEL2ID[x[label_col]]})
 print(f"✅ Using '{label_col}' as label column → mapped to 'labels'")
-print(f"Label distribution: {dataset['labels'][:10]}...")
+
+# Validate mapped integer labels are all within [0, NUM_LABELS)
+unique_int_labels = set(dataset["labels"])
+if not unique_int_labels <= set(range(NUM_LABELS)):
+    raise ValueError(f"❌ Label integers out of range: {unique_int_labels}. Must be subset of {set(range(NUM_LABELS))}")
+print(f"Label distribution (first 10): {dataset['labels'][:10]}  |  unique values: {unique_int_labels}")
 
 # Split dataset
 dataset = dataset.train_test_split(test_size=0.1)
