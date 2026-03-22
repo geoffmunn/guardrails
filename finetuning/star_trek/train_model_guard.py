@@ -1,7 +1,16 @@
 # train_model_guard.py
 import argparse
 import os
-import shutil  # Added for directory deletion
+import shutil
+
+# Restrict to a single GPU before CUDA initialises.
+# PEFT + DataParallel deadlocks: frozen base-model layers can't be synchronised
+# across replicas. The 4B model (≈8 GB in bfloat16) fits comfortably on one L40S
+# (46 GB), so there is no benefit to multi-GPU DataParallel here anyway.
+# To use a specific GPU, set CUDA_VISIBLE_DEVICES before running this script.
+if "CUDA_VISIBLE_DEVICES" not in os.environ:
+    os.environ["CUDA_VISIBLE_DEVICES"] = "0"
+
 import torch
 from datasets import load_dataset
 import torch.nn as nn
@@ -157,12 +166,6 @@ for name, param in model.named_parameters():
 # layer — base weights, adapters, and classification head — is on the same device.
 model = model.to(DEVICE)
 
-if DEVICE == "cuda":
-    # Tell the Trainer to skip DataParallel. PEFT + DataParallel deadlocks because
-    # frozen base-model layers can't be synchronised across replicas. The Trainer
-    # checks hasattr(model, "hf_device_map") — setting it here prevents DataParallel
-    # without requiring device_map at load time (which conflicts with fp16/bf16 AMP).
-    model.hf_device_map = {"": 0}
 
 # ===== TOKENIZE =====
 def tokenize_function(examples):
