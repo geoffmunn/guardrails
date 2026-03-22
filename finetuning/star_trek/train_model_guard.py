@@ -25,7 +25,7 @@ from peft import LoraConfig, get_peft_model, TaskType
 
 # ===== CLI ARGS =====
 parser = argparse.ArgumentParser()
-parser.add_argument("--model", default="Qwen/Qwen3-4B", help="HuggingFace model name (default: Qwen/Qwen3-4B)")
+parser.add_argument("--model", default="Qwen/Qwen3-1.7B", help="HuggingFace model name (default: Qwen/Qwen3-1.7B)")
 args = parser.parse_args()
 
 # ===== CONFIG =====
