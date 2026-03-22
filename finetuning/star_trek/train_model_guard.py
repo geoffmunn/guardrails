@@ -202,7 +202,10 @@ training_args = TrainingArguments(
     metric_for_best_model="eval_loss",
     greater_is_better=False,
     report_to="none",
-    bf16=DEVICE == "cuda",   # bfloat16 AMP only on CUDA; MPS/CPU use float32
+    fp16=DEVICE == "cuda",   # fp16 AMP on CUDA — uses GradScaler which detects overflow,
+                             # skips the optimizer step (protecting Adam state), and recovers.
+                             # bf16 has no scaler so a NaN gradient permanently corrupts the
+                             # Adam moment estimates and all subsequent steps become NaN.
     max_grad_norm=1.0,   # Clip gradients to prevent NaN cascade
 
     optim="adamw_torch",
@@ -227,8 +230,7 @@ class ClassificationTrainer(Trainer):
     def compute_loss(self, model, inputs, return_outputs=False, num_items_in_batch=None):
         labels = inputs.pop("labels").long()          # guarantee int64
         outputs = model(**inputs)                      # model sees no labels → returns logits only
-        logits  = outputs.logits.float()              # cast to float32 for stable softmax
-        loss    = nn.CrossEntropyLoss()(logits, labels)
+        loss    = nn.CrossEntropyLoss()(outputs.logits, labels)
         return (loss, outputs) if return_outputs else loss
 
 trainer = ClassificationTrainer(
