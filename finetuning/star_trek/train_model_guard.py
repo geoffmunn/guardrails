@@ -29,7 +29,7 @@ ID2LABEL = {0: "not_related", 1: "related"}
 BATCH_SIZE = 8
 GRADIENT_ACCUMULATION = 4   # effective batch = BATCH_SIZE * GRADIENT_ACCUMULATION = 32
 EPOCHS = 3
-LEARNING_RATE = 5e-5
+LEARNING_RATE = 1e-5
 MAX_LENGTH = 128  # Questions are 5-20 words; 512 wastes ~4x compute on padding
 
 # ===== CLEAN OUTPUT DIRECTORY =====
@@ -149,6 +149,17 @@ lora_config = LoraConfig(
 )
 model = get_peft_model(model, lora_config)
 model.print_trainable_parameters()
+
+# Re-initialise the classification head with small weights.
+# The score layer is randomly created (it's absent from the pretrained checkpoint),
+# and the default PyTorch init produces logits large enough to overflow bfloat16
+# in early steps, causing loss spikes (1e+29) and NaN grad_norm throughout epoch 1.
+# A small std (0.01) keeps initial logits near-zero so loss starts close to ln(2) ≈ 0.69.
+for name, param in model.named_parameters():
+    if "score" in name and "weight" in name:
+        nn.init.normal_(param.data, std=0.01)
+    elif "score" in name and "bias" in name:
+        nn.init.zeros_(param.data)
 
 if DEVICE == "mps":
     # Move the fully-wrapped model to MPS in one operation so every layer —
