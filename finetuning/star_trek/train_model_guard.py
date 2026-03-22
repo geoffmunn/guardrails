@@ -94,13 +94,19 @@ tokenizer.bos_token_id = tokenizer.eos_token_id
 tokenizer.pad_token_id = tokenizer.eos_token_id
 
 # Detect the best available device and dtype.
-# MPS (Apple Silicon) must be targeted explicitly — device_map="auto" ignores it.
-# float16 is used on CUDA to match fp16=True AMP — the GradScaler's unscale kernel
-# only supports float16; loading in bfloat16 with fp16 AMP raises NotImplementedError.
-# MPS and CPU use float32 (float16/bfloat16 are not reliably supported on either).
+# All devices: load without device_map, apply PEFT, then move the fully-wrapped model
+# to the target device in one shot. This avoids two incompatibility problems:
+#   1. device_map + fp16 AMP: accelerate won't wrap the model in autocast when
+#      hf_device_map is set at load time, so gradients stay in float16 and the
+#      GradScaler raises "Attempting to unscale FP16 gradients."
+#   2. PEFT + DataParallel: Trainer uses DataParallel on multi-GPU when no device_map
+#      is present, but frozen LoRA layers deadlock across replicas.
+# Solution: load plain, wrap with PEFT, move to device, then set model.hf_device_map={}
+# manually — that's the single attribute Trainer checks to skip DataParallel.
 if torch.cuda.is_available():
     DEVICE = "cuda"
-    DTYPE  = torch.float16   # must match fp16=True AMP — GradScaler can only unscale float16 grads
+    DTYPE  = torch.bfloat16   # bfloat16 + bf16=True AMP — wider range than float16,
+                               # no GradScaler needed, stable on Ampere/Ada (L40S etc.)
 elif torch.backends.mps.is_available():
     DEVICE = "mps"
     DTYPE  = torch.float32
@@ -109,30 +115,15 @@ else:
     DTYPE  = torch.float32
 print(f"Training device: {DEVICE}  |  dtype: {DTYPE}")
 
-if DEVICE == "mps":
-    # MPS: load without device_map, apply PEFT, then move everything in one shot.
-    # device_map after PEFT scatters layers across devices causing CPU↔MPS transfers.
-    model = AutoModelForSequenceClassification.from_pretrained(
-        MODEL_NAME,
-        num_labels=NUM_LABELS,
-        id2label=ID2LABEL,
-        label2id=LABEL2ID,
-        trust_remote_code=True,
-        dtype=DTYPE,
-    )
-else:
-    # CUDA / CPU: use device_map="auto" so the Trainer detects hf_device_map and
-    # skips DataParallel. PEFT + DataParallel deadlocks because frozen layers
-    # cannot be synchronised across replicas.
-    model = AutoModelForSequenceClassification.from_pretrained(
-        MODEL_NAME,
-        num_labels=NUM_LABELS,
-        id2label=ID2LABEL,
-        label2id=LABEL2ID,
-        trust_remote_code=True,
-        dtype=DTYPE,
-        device_map="auto",
-    )
+model = AutoModelForSequenceClassification.from_pretrained(
+    MODEL_NAME,
+    num_labels=NUM_LABELS,
+    id2label=ID2LABEL,
+    label2id=LABEL2ID,
+    trust_remote_code=True,
+    dtype=DTYPE,
+    # No device_map — we move manually after PEFT wrapping (see below).
+)
 
 # Align config
 model.config.pad_token_id = tokenizer.pad_token_id
@@ -162,10 +153,16 @@ for name, param in model.named_parameters():
     elif "score" in name and "bias" in name:
         nn.init.zeros_(param.data)
 
-if DEVICE == "mps":
-    # Move the fully-wrapped model to MPS in one operation so every layer —
-    # base weights, adapters, and classification head — is on the same device.
-    model = model.to(DEVICE)
+# Move the fully-wrapped PEFT model to the target device in one operation so every
+# layer — base weights, adapters, and classification head — is on the same device.
+model = model.to(DEVICE)
+
+if DEVICE == "cuda":
+    # Tell the Trainer to skip DataParallel. PEFT + DataParallel deadlocks because
+    # frozen base-model layers can't be synchronised across replicas. The Trainer
+    # checks hasattr(model, "hf_device_map") — setting it here prevents DataParallel
+    # without requiring device_map at load time (which conflicts with fp16/bf16 AMP).
+    model.hf_device_map = {"": 0}
 
 # ===== TOKENIZE =====
 def tokenize_function(examples):
@@ -203,10 +200,8 @@ training_args = TrainingArguments(
     metric_for_best_model="eval_loss",
     greater_is_better=False,
     report_to="none",
-    fp16=DEVICE == "cuda",   # fp16 AMP on CUDA — uses GradScaler which detects overflow,
-                             # skips the optimizer step (protecting Adam state), and recovers.
-                             # bf16 has no scaler so a NaN gradient permanently corrupts the
-                             # Adam moment estimates and all subsequent steps become NaN.
+    bf16=DEVICE == "cuda",   # bfloat16 AMP — matches model dtype (torch.bfloat16).
+                             # Compatible with the manual hf_device_map approach above.
     max_grad_norm=1.0,   # Clip gradients to prevent NaN cascade
 
     optim="adamw_torch",
