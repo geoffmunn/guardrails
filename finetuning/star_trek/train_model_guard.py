@@ -95,11 +95,12 @@ tokenizer.pad_token_id = tokenizer.eos_token_id
 
 # Detect the best available device and dtype.
 # MPS (Apple Silicon) must be targeted explicitly — device_map="auto" ignores it.
-# bfloat16 is used on CUDA (stable, no NaN overflow).
-# MPS and CPU use float32 (bfloat16 is not reliably supported on either).
+# float16 is used on CUDA to match fp16=True AMP — the GradScaler's unscale kernel
+# only supports float16; loading in bfloat16 with fp16 AMP raises NotImplementedError.
+# MPS and CPU use float32 (float16/bfloat16 are not reliably supported on either).
 if torch.cuda.is_available():
     DEVICE = "cuda"
-    DTYPE  = torch.bfloat16
+    DTYPE  = torch.float16   # must match fp16=True AMP — GradScaler can only unscale float16 grads
 elif torch.backends.mps.is_available():
     DEVICE = "mps"
     DTYPE  = torch.float32
