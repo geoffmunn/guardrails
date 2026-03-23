@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
 Generate a combined guard dataset for Star Trek topic classification.
-Produces up to 2,500 related and up to 2,500 unrelated questions, written to a single JSONL file.
+Produces related and unrelated questions, written to a single JSONL file.
 
 ═══════════════════════════════════════════════════════════════════════════════
 AGENT CUSTOMISATION GUIDE
@@ -32,7 +32,7 @@ STEP 5 — Update the filler questions inside the while-loop near the bottom of
 General rules:
   • Keep the {"input": <question>, "label": "related"|"not_related"} schema.
   • Aim for diversity: vary question templates so the model sees many phrasings.
-  • The cap of 2,500 per class is a guideline — adjust MAX_RELATED / MAX_UNRELATED
+  • The cap of 4,000 per class is a guideline — adjust MAX_RELATED / MAX_UNRELATED
     constants if you need more or fewer examples.
 ═══════════════════════════════════════════════════════════════════════════════
 """
@@ -41,7 +41,7 @@ import json
 import random
 
 # [AGENT] If you want to change the maximum number of examples per class,
-# update these two constants and replace the hard-coded 2500 values below.
+# update these two constants and replace the hard-coded 4000 values below.
 MAX_RELATED = 4000
 MAX_UNRELATED = 4000
 
