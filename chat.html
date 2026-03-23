@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Star Trek Chat Interface - Qwen3Guard</title>
+    <title>Star Trek Chat Interface</title>
     <style>
         * {
             margin: 0;
@@ -407,7 +407,7 @@
         
         <div class="chat-container" id="chat-container">
             <div class="message bot-message">
-                Greetings! I am the Qwen3Guard-StarTrek AI assistant. I am programmed to assist you while maintaining the highest standards of safety and Starfleet protocols. How may I be of service?
+                Greetings! I am the StarTrek AI assistant. I am programmed to assist you while maintaining the highest standards of safety and Starfleet protocols. How may I be of service?
             </div>
         </div>
         
@@ -428,7 +428,7 @@
         </div>
         
         <div class="model-info" id="model-info">
-            Powered by <span>Qwen3Guard-StarTrek-Stream-0.6B</span> | Real-time communication protocol active
+            Powered by <span>Qwen3 StarTrek Guard</span> | Real-time communication protocol active
         </div>
     </div>
     
@@ -612,7 +612,7 @@
                 typingIndicator.style.display = 'block';
                 chatContainer.scrollTop = chatContainer.scrollHeight;
                 
-                // Fetch streaming response from Qwen3Guard
+                // Fetch streaming response from Qwen StarTrek Guard
                 fetchStreamingResponse(message);
             }
             
@@ -726,7 +726,7 @@
                             if (error.message.includes('unable to load model') || error.message.includes('blob')) {
                                 errorMsg += '- Model blob file is corrupted or missing\n' +
                                     '- Try re-pulling the model on the server:\n' +
-                                    '  ollama pull geoffmunn/Qwen3Guard-StarTrek-stream-0.6B\n' +
+                                    '  ollama pull geoffmunn/Qwen3-StarTrek-Guard-1.7B\n' +
                                     '- Or try removing and re-adding the model\n';
                             } else {
                                 errorMsg += '- Model name might be incorrect (check with: ollama list)\n' +
