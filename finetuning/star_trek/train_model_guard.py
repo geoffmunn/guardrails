@@ -1,5 +1,4 @@
 # train_model_guard.py
-import argparse
 import os
 import shutil
 
@@ -23,13 +22,14 @@ from transformers import (
 )
 from peft import LoraConfig, get_peft_model, TaskType
 
-# ===== CLI ARGS =====
-parser = argparse.ArgumentParser()
-parser.add_argument("--model", default="Qwen/Qwen3-1.7B", help="HuggingFace model name (default: Qwen/Qwen3-1.7B)")
-args = parser.parse_args()
+# ===== MODEL (prompt) =====
+_DEFAULT_MODEL = "Qwen/Qwen3-1.7B"
+MODEL_NAME = (
+    input(f"HuggingFace model name or path (default: {_DEFAULT_MODEL}): ").strip()
+    or _DEFAULT_MODEL
+)
 
 # ===== CONFIG =====
-MODEL_NAME = args.model
 DATASET_PATH = "guard_dataset.jsonl"
 OUTPUT_DIR = "./finetuned"
 NUM_LABELS = 2
