@@ -402,7 +402,7 @@
     <div class="container">
         <div class="header">
             <h1>USS Enterprise - Communications</h1>
-            <p>Stardate 2401.5 | Qwen3Guard-StarTrek Interface</p>
+            <p>Stardate 2401.5 | StarTrek Guardrail Interface</p>
         </div>
         
         <div class="chat-container" id="chat-container">
@@ -428,7 +428,7 @@
         </div>
         
         <div class="model-info" id="model-info">
-            Powered by <span>Qwen3 StarTrek Guard</span> | Real-time communication protocol active
+            Powered by <span>StarTrek Guard</span> | Real-time communication protocol active
         </div>
     </div>
     
@@ -459,8 +459,9 @@
             const MODERATION_API_URL = 'http://localhost:8080/api/moderate';
             
             // LLM Configuration - Star Trek Model
+            // Change the baseUrl value to be a different server location if want better performance
             const LLM_CONFIG = {
-                baseUrl: 'http://192.168.10.100:11434',
+                baseUrl: 'http://localhost:11434',
                 model: 'Qwen3-4B-f16:Q5_K_M',
                 endpoint: '/api/chat'
             };
