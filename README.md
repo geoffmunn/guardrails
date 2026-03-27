@@ -80,7 +80,7 @@ cd finetuning/star_trek
 
 ### Step 1: Generate the questions
 
-You need a large set of questions or statements with the appropriate respones so the model can get a feel for what is related or not.
+You need a large set of questions or statements with the appropriate responses so the model can get a feel for what is related or not.
 
 The base Qwen model that we're using already has rich semantic understanding of everything - maths, geography, Star Trek, Star Wars, etc. Fine-tuning adjusts the model's internal representations to draw a decision boundary. The classifier head then sits on top of those representations.
 
@@ -129,7 +129,7 @@ The output will be in the `finetuned` directory. You don't need to do anything w
 
 Technically you don't need to do this, but the alternatives will require you to build the model locally and move the resulting file around which can be hard work, especially if you've used a multi-billion parameter model. Uploading it to Hugging Face is nice and tidy, _but you will need a Hugging Face account_.
 
-Run the upload script, and provide your username and preferred repository name for your new guardrail model. If the repository name doesn't exit, it will be automatically created.
+Run the upload script, and provide your username and preferred repository name for your new guardrail model. If the repository name doesn't exist, it will be automatically created.
 
 By default, your model will be private and not visible to anyone else.
 
@@ -149,7 +149,7 @@ Go back to the main directory, and run this command:
 python3 ./api_server.py
 ```
 
-You'll need to provide the model name you want to use, which is presumably the model name we uploaded to Hugging Face in the previous step. It wll look something like `[your_username]/[model_name]` which you can also see in the Hugging Face URL for your model repository.
+You'll need to provide the model name you want to use, which is presumably the model name we uploaded to Hugging Face in the previous step. It will look something like `[your_username]/[model_name]` which you can also see in the Hugging Face URL for your model repository.
 
 This will create a very basic server on port 8080.
 
@@ -174,7 +174,7 @@ You can obviously change this text, and you might need to adjust it depending on
 
 You'll also need to update the questions in the `finetune_test.txt` file.
 
-_"@finetune_test.txt Update this file with a list of test questions covering both  car-related and unrelated topics, as well as adversarial questions."
+_"@finetune_test.txt Update this file with a list of test questions covering both car-related and unrelated topics, as well as adversarial questions."_
 
 When you train the model using your new `guard_dataset.jsonl` file, you'll see the results from your test questions and hopefully they'll be classified correctly.
 
@@ -182,7 +182,7 @@ Just run the `train_model_guard.py` script again and you'll have your own custom
 
 ## Why do some questions get allowed when they're not related?
 
-If this happens, then the unrelated training set was too narrow in character. The model had never seen anything in that region of the embedding space labelled not_related, so it defaulted to the wrong side. You can fix this by adding more unrelated or adverserial questions concerning the unrelated topic.
+If this happens, then the unrelated training set was too narrow in character. The model had never seen anything in that region of the embedding space labelled not_related, so it defaulted to the wrong side. You can fix this by adding more unrelated or adversarial questions concerning the unrelated topic.
 
 ## How to host the LLM on a better server
 
@@ -208,7 +208,7 @@ const LLM_CONFIG = {
 
 **This example chat interface is clearly NOT production-ready**
 
-The guardrail LLM is perfectly suitable for production use - don't let anyone tell you otherwise. If it passes your quality assuarance tests, then you can use it anywhere, just like a regular LLM.
+The guardrail LLM is perfectly suitable for production use - don't let anyone tell you otherwise. If it passes your quality assurance tests, then you can use it anywhere, just like a regular LLM.
 
 You'll need to integrate it into whatever actual user interface you have in mind, which might be more complicated though.
 
@@ -220,8 +220,6 @@ So far this has been tested on:
 - Qwen3-1.7B
 - Qwen3-4B
 - Qwen3-8B
-
-
 
 
 
