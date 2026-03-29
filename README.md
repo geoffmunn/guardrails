@@ -18,11 +18,16 @@ A guardrail acts as a very simple yes/no check to make sure that a user request 
 
 For example, if you only want to answer questions about cars, then the guardrail will be trained on car-related questions. If someone asks a question about sports, then it will return a response saying 'not related'.
 
-Because the guardrail process is very simple, you **do not** need a super-powerful LLM to run this. In fact, you can use a lightweight 1.7B parameter model and get perfect results. You can even use a very lightweight model (less than 1 billion parameters) and it will still work and be lightning fast (although the quality starts to drop).
+The key idea is that the guardrail is a **separate, lightweight model** that sits in front of your main LLM. The flow looks like this:
+
+1. The user submits a question
+2. The guardrail model classifies it as **related** or **not related** (this is fast — it's a tiny model doing a simple classification)
+3. If the question is related, it gets forwarded to the main LLM for a full answer
+4. If it's not related, the request is rejected before it ever reaches the main LLM
+
+Because the guardrail is just a classifier, you **do not** need a super-powerful LLM to run it. In fact, you can use a lightweight 1.7B parameter model and get perfect results. You can even use a very lightweight model (less than 1 billion parameters) and it will still work and be lightning fast (although the quality starts to drop).
 
 For this project, I'll be using a 1.7B Qwen3 model with Star Trek training data, but you can easily swap this out for anything you prefer. I'll also show you how to set up your training questions.
-
->The training script uses LoRA (Low-Rank Adaption) fine-tuning, LoRA is a parameter-efficient fine-tuning (PEFT) technique that adapts large pre-trained models to specific tasks by training only a tiny fraction of their parameters. Instead of updating all billions of weights in a model - which is slow and memory-intensive - LoRA "freezes" the original weights and adds small, trainable "adapter" matrices to specific layers.
 
 # Setup steps
 
@@ -82,7 +87,7 @@ cd finetuning/star_trek
 
 You need a large set of questions or statements with the appropriate responses so the model can get a feel for what is related or not.
 
-The base Qwen model that we're using already has rich semantic understanding of everything - maths, geography, Star Trek, Star Wars, etc. Fine-tuning adjusts the model's internal representations to draw a decision boundary. The classifier head then sits on top of those representations.
+The base Qwen model that we're using already has rich semantic understanding of everything - maths, geography, Star Trek, Star Wars, etc. Fine-tuning teaches the model to draw a boundary between related and not-related inputs, so it can confidently classify questions it hasn't seen before.
 
 **The general rule:**
 
@@ -103,7 +108,12 @@ Run this script:
 python3 ./generate_dataset.py
 ```
 
-This will create a file called `guard_dataset.jsonl` - you need to give it a quick look to make sure that the questions seem relevant. 
+This will create a file called `guard_dataset.jsonl` - you need to give it a quick look to make sure that the questions seem relevant. Each line is a JSON object with a question and a label:
+
+```json
+{"input": "What engine does the Enterprise use?", "label": "related"}
+{"input": "What is the capital of France?", "label": "not_related"}
+```
 
 If you have customised this for a different topic, you'll also need to make sure that it hasn't gone into a repetitive loop.
 
@@ -115,15 +125,22 @@ Run this script:
 python3 ./train_model_guard.py
 ```
 
-By default this will use Qwen3-1.7B. You can use any model that you prefer from Hugging Face.
+By default this will use Qwen3-1.7B. You can use any model that you prefer from Hugging Face. So far this has been tested on:
 
-Qwen is pretty good - the 0.6B model will be very fast, but you'll get better results from the 1.7B model.
+| Model | Speed | Accuracy | Notes |
+|---|---|---|---|
+| Qwen3-0.6B | Very fast | Good | Best for low-resource environments, but accuracy drops on edge cases |
+| Qwen3-1.7B | Fast | Excellent | Recommended starting point — best balance of speed and quality |
+| Qwen3-4B | Moderate | Excellent | Diminishing returns over 1.7B for a simple classifier |
+| Qwen3-8B | Slow | Excellent | Overkill for guardrail use, but works well if you have the hardware |
 
 **THIS SCRIPT WILL TAKE A LONG TIME**
 
 The more questions you train it on, the slower it takes. I'm using 8,000 questions here - if your topic is very niche then this might be too many, but for a broad topic it should be easy.
 
 The output will be in the `finetuned` directory. You don't need to do anything with these files.
+
+>**What is LoRA?** The training script uses LoRA (Low-Rank Adaptation) fine-tuning. LoRA is a parameter-efficient fine-tuning (PEFT) technique that adapts large pre-trained models to specific tasks by training only a tiny fraction of their parameters. Instead of updating all billions of weights in a model — which is slow and memory-intensive — LoRA "freezes" the original weights and adds small, trainable "adapter" matrices to specific layers. This is why you can train a guardrail model on a personal laptop.
 
 ### Step 3: Upload to Hugging Face
 
@@ -157,7 +174,7 @@ If you load `chat.html` into a browser, you'll be able to ask questions and get 
 
 If you are running this on a laptop then it is likely to be quite slow, but you'll still be able to see the results.
 
-# Next steps
+# Customisation
 
 ## How to build your own topic
 
@@ -170,7 +187,7 @@ The adversarial section needs appropriate questions as well."_
 
 You can obviously change this text, and you might need to adjust it depending on your new topic and how well the AI agent responds.
 
-### Test questions
+## Test questions
 
 You'll also need to update the questions in the `finetune_test.txt` file.
 
@@ -180,9 +197,13 @@ When you train the model using your new `guard_dataset.jsonl` file, you'll see t
 
 Just run the `train_model_guard.py` script again and you'll have your own customised guardrail model!
 
+# Troubleshooting
+
 ## Why do some questions get allowed when they're not related?
 
 If this happens, then the unrelated training set was too narrow in character. The model had never seen anything in that region of the embedding space labelled not_related, so it defaulted to the wrong side. You can fix this by adding more unrelated or adversarial questions concerning the unrelated topic.
+
+# Deployment
 
 ## How to host the LLM on a better server
 
@@ -211,16 +232,4 @@ const LLM_CONFIG = {
 The guardrail LLM is perfectly suitable for production use - don't let anyone tell you otherwise. If it passes your quality assurance tests, then you can use it anywhere, just like a regular LLM.
 
 You'll need to integrate it into whatever actual user interface you have in mind, which might be more complicated though.
-
-## Select an LLM
-
-So far this has been tested on:
-
-- Qwen3-0.6B
-- Qwen3-1.7B
-- Qwen3-4B
-- Qwen3-8B
-
-
-
 
