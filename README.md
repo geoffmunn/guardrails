@@ -4,7 +4,7 @@ This project is to demonstrate how to set up a guardrail project that only allow
 
 ## Why is this important?
 
-Let's say you're employed by a government agency or a company who is very excited about this whole 'AI thing', but the security or legal team are very worried about the chatbot going rogue with answers about Uncle Elon or el Presidente Trump (or if you're NZ Health, giving advice on [how to make meth](https://www.rnz.co.nz/news/national/590723/emergency-department-ai-gives-meth-recipe-in-jailbreak-testing)). They only want relevant questions being passed to the LLM.
+Let's say you're employed by a government agency or a company who is very excited about this whole 'AI thing', but the security or legal team are very worried about the chatbot going rogue with answers about Uncle Elon or el Presidente Trump (or if you're NZ Health, giving advice on [how to make meth](https://www.rnz.co.nz/news/national/590723/emergency-department-ai-gives-meth-recipe-in-jailbreak-testing)). They only want relevant (and appropriate) questions being passed to the LLM.
 
 The solution to this is to put a guardrail in, which returns a classification before the UI sends the question to the LLM for processing. If the question or query is not related to the main subject area that you cover, then you can reject the user request.
 
@@ -21,13 +21,13 @@ For example, if you only want to answer questions about cars, then the guardrail
 The key idea is that the guardrail is a **separate, lightweight model** that sits in front of your main LLM. The flow looks like this:
 
 1. The user submits a question
-2. The guardrail model classifies it as **related** or **not related** (this is fast — it's a tiny model doing a simple classification)
+2. The guardrail model classifies it as **related** or **not related** (this is fast - it's a tiny model doing a simple classification)
 3. If the question is related, it gets forwarded to the main LLM for a full answer
 4. If it's not related, the request is rejected before it ever reaches the main LLM
 
 Because the guardrail is just a classifier, you **do not** need a super-powerful LLM to run it. In fact, you can use a lightweight 1.7B parameter model and get perfect results. You can even use a very lightweight model (less than 1 billion parameters) and it will still work and be lightning fast (although the quality starts to drop).
 
-For this project, I'll be using a 1.7B Qwen3 model with Star Trek training data, but you can easily swap this out for anything you prefer. I'll also show you how to set up your training questions.
+For this project, I'll be using a 1.7B Qwen3 model with Star Trek training data (that we'll create here), but you can easily swap this out for anything you prefer. I'll also show you how to set up your training questions.
 
 # Setup steps
 
@@ -36,6 +36,7 @@ For this project, I'll be using a 1.7B Qwen3 model with Star Trek training data,
 - An internet connection
 - Administrator access to your computer
 - A Hugging Face account (https://huggingface.co/)
+- Python 3.x
 
 All or some of these python modules:
 
@@ -72,7 +73,7 @@ hf auth login
 
 There are two parts to this process.
 
-- First, you need to train (finetune) an LLM with your guardrail questions
+- First, you need to train (finetune) an LLM with your guardrail questions.
 - Second, you set up a basic server instance which uses your new model and use a chat interface to connect to it.
 
 ## Part 1: Train an LLM
@@ -115,7 +116,7 @@ This will create a file called `guard_dataset.jsonl` - you need to give it a qui
 {"input": "What is the capital of France?", "label": "not_related"}
 ```
 
-If you have customised this for a different topic, you'll also need to make sure that it hasn't gone into a repetitive loop.
+If you have customised this for a different topic, you'll also need to make sure that it hasn't gone into a repetitive loop. This sometimes happens if your topic is very niche and the number of questions you've asked for exceeds the likely knowledge base of the LLM. In these cases, try reducing the number of questions.
 
 ### Step 2: Train the model
 
@@ -140,7 +141,7 @@ The more questions you train it on, the slower it takes. I'm using 8,000 questio
 
 The output will be in the `finetuned` directory. You don't need to do anything with these files.
 
->**What is LoRA?** The training script uses LoRA (Low-Rank Adaptation) fine-tuning. LoRA is a parameter-efficient fine-tuning (PEFT) technique that adapts large pre-trained models to specific tasks by training only a tiny fraction of their parameters. Instead of updating all billions of weights in a model — which is slow and memory-intensive — LoRA "freezes" the original weights and adds small, trainable "adapter" matrices to specific layers. This is why you can train a guardrail model on a personal laptop.
+>**What is LoRA?** The training script uses LoRA (Low-Rank Adaptation) fine-tuning. LoRA is a parameter-efficient fine-tuning (PEFT) technique that adapts large pre-trained models to specific tasks by training only a tiny fraction of their parameters. Instead of updating all billions of weights in a model - which is slow and memory-intensive - LoRA "freezes" the original weights and adds small, trainable "adapter" matrices to specific layers. This is why you can train a guardrail model on a personal laptop.
 
 ### Step 3: Upload to Hugging Face
 
@@ -201,7 +202,7 @@ Just run the `train_model_guard.py` script again and you'll have your own custom
 
 ## Why do some questions get allowed when they're not related?
 
-If this happens, then the unrelated training set was too narrow in character. The model had never seen anything in that region of the embedding space labelled not_related, so it defaulted to the wrong side. You can fix this by adding more unrelated or adversarial questions concerning the unrelated topic.
+If this happens, then the unrelated training set was too narrow in character. The model had never seen anything in that region of the embedding space labelled _not_related_, so it defaulted to the wrong side. You can fix this by adding more unrelated or adversarial questions concerning the unrelated topic.
 
 # Deployment
 
