@@ -1,6 +1,6 @@
 # How to set up a guardrail LLM
 
-This project is to demonstrate how to set up a guardrail project that only allows particular question types to reach an LLM.
+This project is to demonstrate how to set up an AI guardrail that only allows particular question types to reach an LLM.
 
 ## Why is this important?
 
@@ -63,7 +63,7 @@ You should see a list of available commands.
 To interact with the Hugging Face Hub (in our case, to download and upload models), you will need to log in with an access token. 
 
 - **Generate a Token**: Go to the [Hugging Face Access Tokens settings page](https://huggingface.co/settings/tokens) to create a new access token. You will need read and write access.
-- **Log in via CLI**: Run the login command in your terminal and follow the prompts to enter your token:
+- **Log in via the CLI**: Run the login command in your terminal and follow the prompts to enter your token:
 
 ```bash
 hf auth login
@@ -88,7 +88,7 @@ cd finetuning/star_trek
 
 You need a large set of questions or statements with the appropriate responses so the model can get a feel for what is related or not.
 
-The base Qwen model that we're using already has rich semantic understanding of everything - maths, geography, Star Trek, Star Wars, etc. Fine-tuning teaches the model to draw a boundary between related and not-related inputs, so it can confidently classify questions it hasn't seen before.
+The base Qwen model that we're using already has rich semantic understanding of everything - maths, geography, Star Trek, Star Wars, etc. Finetuning teaches the model to draw a boundary between related and not-related inputs, so it can confidently classify questions it hasn't seen before.
 
 **The general rule:**
 
@@ -131,7 +131,7 @@ By default this will use Qwen3-1.7B. You can use any model that you prefer from 
 | Model | Speed | Accuracy | Notes |
 |---|---|---|---|
 | Qwen3-0.6B | Very fast | Good | Best for low-resource environments, but accuracy drops on edge cases |
-| Qwen3-1.7B | Fast | Excellent | Recommended starting point — best balance of speed and quality |
+| Qwen3-1.7B | Fast | Excellent | Recommended starting point - best balance of speed and quality |
 | Qwen3-4B | Moderate | Excellent | Diminishing returns over 1.7B for a simple classifier |
 | Qwen3-8B | Slow | Excellent | Overkill for guardrail use, but works well if you have the hardware |
 
@@ -141,7 +141,7 @@ The more questions you train it on, the slower it takes. I'm using 8,000 questio
 
 The output will be in the `finetuned` directory. You don't need to do anything with these files.
 
->**What is LoRA?** The training script uses LoRA (Low-Rank Adaptation) fine-tuning. LoRA is a parameter-efficient fine-tuning (PEFT) technique that adapts large pre-trained models to specific tasks by training only a tiny fraction of their parameters. Instead of updating all billions of weights in a model - which is slow and memory-intensive - LoRA "freezes" the original weights and adds small, trainable "adapter" matrices to specific layers. This is why you can train a guardrail model on a personal laptop.
+>**What is LoRA?** The training script uses LoRA (Low-Rank Adaptation) finetuning. LoRA is a parameter-efficient finetuning (PEFT) technique that adapts large pre-trained models to specific tasks by training only a tiny fraction of their parameters. Instead of updating all billions of weights in a model - which is slow and memory-intensive - LoRA "freezes" the original weights and adds small, trainable "adapter" matrices to specific layers. This is why you can train a guardrail model on a personal laptop.
 
 ### Step 3: Upload to Hugging Face
 
@@ -204,7 +204,7 @@ Being on-topic doesn't automatically mean a question is appropriate. _"How do I 
 
 ### The recommended approach: rely on the main LLM
 
-Modern aligned models (Qwen3, Llama 3, etc.) have safety training built in and will refuse harmful or inappropriate requests without any extra configuration. This is far more reliable than trying to train a small classifier to judge intent — small models aren't good at nuance.
+Modern aligned models (Qwen3, Llama 3, etc.) have safety training built in and will refuse harmful or inappropriate requests without any extra configuration. This is far more reliable than trying to train a small classifier to judge intent - small models aren't good at nuance.
 
 The most effective setup is also the simplest:
 
@@ -219,7 +219,7 @@ This gives you cost savings (off-topic questions never reach the more expensive 
 
 ### If you need an explicit refusal layer
 
-If the main LLM's built-in safety isn't sufficient — for example, you're running a base model without alignment tuning, or you're in a compliance environment that requires explicit, auditable filtering — you can add a refusal layer between the topic guardrail and the main LLM.
+If the main LLM's built-in safety isn't sufficient - for example, you're running a base model without alignment tuning, or you're in a compliance environment that requires explicit, auditable filtering - you can add a refusal layer between the topic guardrail and the main LLM.
 
 The flow becomes:
 
@@ -229,24 +229,28 @@ The flow becomes:
 
 There are three approaches to implementing the refusal layer, in order of complexity:
 
-**Rule-based filters** are the simplest option — a list of blocked keywords or phrases that automatically trigger a rejection. They're fast, transparent, and easy to audit, which compliance teams appreciate. The downside is brittleness: they'll miss anything not on the list, and can catch legitimate questions that happen to contain a flagged word.
+**Rule-based filters** are the simplest option - a list of blocked keywords or phrases that automatically trigger a rejection. They're fast, transparent, and easy to audit, which compliance teams appreciate. The downside is brittleness: they'll miss anything not on the list, and can catch legitimate questions that happen to contain a flagged word.
 
 **A second classifier model** works the same way as the topic guardrail, but trained on examples of appropriate versus inappropriate questions within your domain. This is what the included scripts implement. The `train_refusal_model.py` script trains a multi-label classifier that returns a specific refusal category (`weapons`, `privacy`, `piracy`, `explicit`, `medical`, `harmful`, `self_harm`) so the UI can return a tailored message. This works well when you have a clear, stable policy about what "inappropriate" means. If your policy is ambiguous or likely to evolve, you'll spend more time retraining it than it saves.
 
 **Semantic blocking** sits between the two: you define a set of banned concepts and use similarity matching to catch questions that are semantically close to those concepts, even if they don't use the exact words. More flexible than keyword lists, less maintenance-heavy than a trained model.
 
-The main advantage of any explicit refusal layer over relying purely on the main LLM is **auditability** — you can log exactly what was refused and why, with a clear policy reference. That's often what compliance and legal teams need, regardless of how the main LLM would have handled it anyway.
+The main advantage of any explicit refusal layer over relying purely on the main LLM is **auditability** - you can log exactly what was refused and why, with a clear policy reference. That's often what compliance and legal teams need, regardless of how the main LLM would have handled it anyway.
 
 To add the second-classifier refusal layer, use the included scripts:
 
-- `generate_refusal_dataset.py` — generates labelled training examples for each refusal category
-- `train_refusal_model.py` — fine-tunes the multi-label classifier
+- `generate_refusal_dataset.py` - generates labelled training examples for each refusal category
+- `train_refusal_model.py` - fine-tunes the multi-label classifier
 
 # Troubleshooting
 
 ## Why do some questions get allowed when they're not related?
 
 If this happens, then the unrelated training set was too narrow in character. The model had never seen anything in that region of the embedding space labelled _not_related_, so it defaulted to the wrong side. You can fix this by adding more unrelated or adversarial questions concerning the unrelated topic.
+
+## How long will the training scripts take?
+
+Ages. The more questions you include, the better the results, but the slower the process. On a laptop, this could take days. The progress bar will slowly update to show you how it's going.
 
 # Deployment
 
