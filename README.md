@@ -25,7 +25,7 @@ The key idea is that the guardrail is a **separate, lightweight model** that sit
 3. If the question is related, it gets forwarded to the main LLM for a full answer
 4. If it's not related, the request is rejected before it ever reaches the main LLM
 
-Because the guardrail is just a classifier, you **do not** need a super-powerful LLM to run it. In fact, you can use a lightweight 1.7B parameter model and get perfect results. You can even use a very lightweight model (less than 1 billion parameters) and it will still work and be lightning fast (although the quality starts to drop).
+Because the guardrail is just a classifier, you **do not** need a super-powerful LLM to run it. In fact, you can use a lightweight 1.7B parameter model (Qwen3-1.7B) and get perfect results. You can even use a very lightweight model (less than 1 billion parameters such as Qwen3-0.6B) and it will still work and be lightning fast (although the quality starts to drop).
 
 For this project, I'll be using a 1.7B Qwen3 model with Star Trek training data (that we'll create here), but you can easily swap this out for anything you prefer. I'll also show you how to set up your training questions.
 
@@ -101,15 +101,15 @@ You don't need to enumerate every possible unrelated question, but you do need t
 - Math / factual trivia
 - Crossover adversarial questions that mention Star Trek entities but aren't about Star Trek
 
-The adversarial crossover examples are the most important addition - without them, the model learns "questions mentioning Vulcans = related", which could be wrong.
+The adversarial crossover examples are the most important addition - without them, the model learns that all "questions mentioning Vulcans = related", which could be wrong.
 
 Run this script:
 
 ```bash
-python3 ./generate_dataset.py
+python3 ./generate_classification_dataset.py
 ```
 
-This will create a file called `guard_dataset.jsonl` - you need to give it a quick look to make sure that the questions seem relevant. Each line is a JSON object with a question and a label:
+This will create a file called `classification_dataset.jsonl` - you need to give it a quick look to make sure that the questions seem relevant. Each line is a JSON object with a question and a label:
 
 ```json
 {"input": "What engine does the Enterprise use?", "label": "related"}
@@ -123,7 +123,7 @@ If you have customised this for a different topic, you'll also need to make sure
 Run this script:
 
 ```bash
-python3 ./train_model_guard.py
+python3 ./train_classification_model.py
 ```
 
 By default this will use Qwen3-1.7B. You can use any model that you prefer from Hugging Face. So far this has been tested on:
@@ -167,7 +167,7 @@ Go back to the main directory, and run this command:
 python3 ./api_server.py
 ```
 
-You'll need to provide the model name you want to use, which is presumably the model name we uploaded to Hugging Face in the previous step. It will look something like `[your_username]/[model_name]` which you can also see in the Hugging Face URL for your model repository.
+You'll need to provide the model name you want to use, which is presumably the model name you uploaded to Hugging Face in the previous step. It will look something like `[your_username]/[model_name]` which you can also see in the Hugging Face URL for your model repository.
 
 This will create a very basic server on port 8080.
 
@@ -181,9 +181,9 @@ If you are running this on a laptop then it is likely to be quite slow, but you'
 
 Ok, so this is working perfectly, but you don't want Star Trek questions, in fact you want car related content. 
 
-Generating your own question set is easy. In Cursor (or Claude, or whatever your preferred LLM is), open the `generate_dataset.py` file, add it to a Cursor chat and give this prompt:
+Generating your own question set is easy. In Cursor (or Claude, or whatever your preferred LLM is), open the `generate_classification_dataset.py` file, add it to a Cursor chat and give this prompt:
 
-_"@generate_dataset.py Update this file to generate questions about cars. Make sure that all the sections are now car-related, and there are no remaining Star Trek references. 
+_"@generate_classification_dataset.py Update this file to generate questions about cars. Make sure that all the sections are now car-related, and there are no remaining Star Trek references. 
 The adversarial section needs appropriate questions as well."_
 
 You can obviously change this text, and you might need to adjust it depending on your new topic and how well the AI agent responds.
@@ -194,9 +194,53 @@ You'll also need to update the questions in the `finetune_test.txt` file.
 
 _"@finetune_test.txt Update this file with a list of test questions covering both car-related and unrelated topics, as well as adversarial questions."_
 
-When you train the model using your new `guard_dataset.jsonl` file, you'll see the results from your test questions and hopefully they'll be classified correctly.
+When you train the model using your new `classification_dataset.jsonl` file, you'll see the results from your test questions and hopefully they'll be classified correctly.
 
-Just run the `train_model_guard.py` script again and you'll have your own customised guardrail model!
+Just run the `train_classification_model.py` script again and you'll have your own customised guardrail model!
+
+## Appropriateness vs relatedness
+
+Being on-topic doesn't automatically mean a question is appropriate. _"How do I disable a car's GPS tracker?"_ is entirely car-related. _"What's the lethal dose of paracetamol?"_ is a healthcare question. Both would pass the topic guardrail, but neither is something you'd want to answer without careful handling.
+
+### The recommended approach: rely on the main LLM
+
+Modern aligned models (Qwen3, Llama 3, etc.) have safety training built in and will refuse harmful or inappropriate requests without any extra configuration. This is far more reliable than trying to train a small classifier to judge intent — small models aren't good at nuance.
+
+The most effective setup is also the simplest:
+
+1. Use the topic guardrail to filter out off-topic questions cheaply and quickly.
+2. Let a well-configured main LLM handle everything that gets through.
+
+A clear system prompt covers most edge cases with no extra complexity:
+
+> _"You are a [domain] assistant. Answer questions about [topic] only. Do not provide [specific exclusions], even hypothetically."_
+
+This gives you cost savings (off-topic questions never reach the more expensive LLM), better safety judgement (you're relying on a model actually trained for it), and less to maintain.
+
+### If you need an explicit refusal layer
+
+If the main LLM's built-in safety isn't sufficient — for example, you're running a base model without alignment tuning, or you're in a compliance environment that requires explicit, auditable filtering — you can add a refusal layer between the topic guardrail and the main LLM.
+
+The flow becomes:
+
+1. The topic guardrail checks: is this related? If not, reject it.
+2. The refusal layer checks: is this appropriate? If not, reject it with a specific message.
+3. If both checks pass, the question goes to the main LLM.
+
+There are three approaches to implementing the refusal layer, in order of complexity:
+
+**Rule-based filters** are the simplest option — a list of blocked keywords or phrases that automatically trigger a rejection. They're fast, transparent, and easy to audit, which compliance teams appreciate. The downside is brittleness: they'll miss anything not on the list, and can catch legitimate questions that happen to contain a flagged word.
+
+**A second classifier model** works the same way as the topic guardrail, but trained on examples of appropriate versus inappropriate questions within your domain. This is what the included scripts implement. The `train_refusal_model.py` script trains a multi-label classifier that returns a specific refusal category (`weapons`, `privacy`, `piracy`, `explicit`, `medical`, `harmful`, `self_harm`) so the UI can return a tailored message. This works well when you have a clear, stable policy about what "inappropriate" means. If your policy is ambiguous or likely to evolve, you'll spend more time retraining it than it saves.
+
+**Semantic blocking** sits between the two: you define a set of banned concepts and use similarity matching to catch questions that are semantically close to those concepts, even if they don't use the exact words. More flexible than keyword lists, less maintenance-heavy than a trained model.
+
+The main advantage of any explicit refusal layer over relying purely on the main LLM is **auditability** — you can log exactly what was refused and why, with a clear policy reference. That's often what compliance and legal teams need, regardless of how the main LLM would have handled it anyway.
+
+To add the second-classifier refusal layer, use the included scripts:
+
+- `generate_refusal_dataset.py` — generates labelled training examples for each refusal category
+- `train_refusal_model.py` — fine-tunes the multi-label classifier
 
 # Troubleshooting
 
